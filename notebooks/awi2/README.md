@@ -62,5 +62,5 @@ Progress was made in integrating the sensing and irrigation subsystems. BLE comm
 
 Our water valve broke, we decided to pivot the way our demo performed. Instead, we decided to use gravity as a way to simulate the water flow. However, we noticed that the water flow was about 75% less than the valve, so our watering time will proportionally increase.
 
-![Final Demo Image](demo.png)
+![Final Demo Image](image9.png)
 
