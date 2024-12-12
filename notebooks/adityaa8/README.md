@@ -21,8 +21,8 @@ During today’s meeting, we worked on upgrading the design document by first de
 
 [https://docs.google.com/document/d/1k8CUsqsZVVNnwOx9esM4K0Jc\_y8QpcirjPBNGNGZ5Og/edit?tab=t.0\#heading=h.kqh02ya0f8t1](https://docs.google.com/document/d/1k8CUsqsZVVNnwOx9esM4K0Jc_y8QpcirjPBNGNGZ5Og/edit?tab=t.0#heading=h.kqh02ya0f8t1)
 
-![][image1]  
-**![][image2]**
+![Updated our Design Document](image1.png)
+![Updated our Design Document](image2.png)
 
 **October 10, 2024**  
 **Sensor Integration**
