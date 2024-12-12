@@ -24,6 +24,7 @@ During today’s meeting, we worked on upgrading the design document by first de
 ![Updated our Design Document](image1.png)
 ![Updated our Design Document](image2.png)
 
+
 **October 10, 2024**  
 **Sensor Integration**
 
