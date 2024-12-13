@@ -21,15 +21,15 @@ static BLEAdvertisedDevice *myDevice;
 
 #define VALVE_PIN_1 4
 #define VALVE_PIN_2 5
+#define FLOW_SENSOR_PIN 4 
+
+int currentTotalFlow = 0;
 
 static void notifyCallback(BLERemoteCharacteristic *pBLERemoteCharacteristic, uint8_t *pData, size_t length, bool isNotify) {
   Serial.print("Notify callback for characteristic ");
   Serial.print(pBLERemoteCharacteristic->getUUID().toString().c_str());
   Serial.print(" of data length ");
   Serial.println(length);
-  // Serial.print("data: ");
-  // Serial.write(pData, length);
-  // Serial.println();
 
   // Convert received data to a String
   char data[length + 1];
@@ -39,38 +39,94 @@ static void notifyCallback(BLERemoteCharacteristic *pBLERemoteCharacteristic, ui
   Serial.print("Received data: ");
   Serial.println(data);
 
-  // Parse the string for the moisture value
+  // Convert to String for easier manipulation
   String receivedString = String(data);
-  int moistureValue = -1;
-  int separatorIndex = receivedString.indexOf("|Moisture:");
-  if (separatorIndex != -1) {
-    String moistureStr = receivedString.substring(separatorIndex + 10);
-    moistureValue = moistureStr.toInt(); // Convert to integer
-    Serial.print("Parsed Moisture Value: ");
-    Serial.println(moistureValue);
+  
+  // Initialize variables to store parsed values
+  int moistureValue1 = -1;
+  int moistureValue2 = -1;
+  float temperature = -1;
+  float humidity = -1;
+
+  // Parse Moisture1
+  int moisture1Index = receivedString.indexOf("Moisture1:");
+  if (moisture1Index != -1) {
+    String moisture1Str = receivedString.substring(moisture1Index + 10, receivedString.indexOf(",", moisture1Index));
+    moistureValue1 = moisture1Str.toInt();
+    Serial.print("Parsed Moisture1 Value: ");
+    Serial.println(moistureValue1);
   } else {
-    Serial.println("Moisture value not found in received data.");
-    return; // Exit if parsing fails
+    Serial.println("Moisture1 value not found.");
   }
 
-  int moistureUpper = 2700;
-  int moistureLower = 2700; 
+  // Parse Moisture2
+  int moisture2Index = receivedString.indexOf("Moisture2:");
+  if (moisture2Index != -1) {
+    String moisture2Str = receivedString.substring(moisture2Index + 10, receivedString.indexOf(",", moisture2Index));
+    moistureValue2 = moisture2Str.toInt();
+    Serial.print("Parsed Moisture2 Value: ");
+    Serial.println(moistureValue2);
+  } else {
+    Serial.println("Moisture2 value not found.");
+  }
 
-  // Control the valves based on thresholds
-  if (moistureValue > moistureUpper) {
-    // Open the valve
+  // Calculate the average moisture value
+  int averageMoisture = (moistureValue1 + moistureValue2) / 2;
+  Serial.print("Average Moisture Value: ");
+  Serial.println(averageMoisture);
+
+  // Parse Temperature
+  int tempIndex = receivedString.indexOf("Temp:");
+  if (tempIndex != -1) {
+    String tempStr = receivedString.substring(tempIndex + 5, receivedString.indexOf(",", tempIndex));
+    temperature = tempStr.toFloat();
+    Serial.print("Parsed Temperature Value: ");
+    Serial.println(temperature);
+  } else {
+    Serial.println("Temperature value not found.");
+  }
+
+  // Parse Humidity
+  int humidityIndex = receivedString.indexOf("Humidity:");
+  if (humidityIndex != -1) {
+    String humidityStr = receivedString.substring(humidityIndex + 9);
+    humidity = humidityStr.toFloat();
+    Serial.print("Parsed Humidity Value: ");
+    Serial.println(humidity);
+  } else {
+    Serial.println("Humidity value not found.");
+  }
+
+  // Define thresholds
+  int moistureUpper = 2400;
+  int moistureLower = 2400;  // Adjust this as needed
+  float tempUpper = 86.0;    // Temperature threshold in Fahrenheit
+  float humidityLower = 40.0; // Humidity threshold in percentage
+
+  // Control the valves based on parsed values
+  if (averageMoisture > moistureUpper || temperature > tempUpper) {
+    // Open valve if dry or too hot
     digitalWrite(VALVE_PIN_1, HIGH);
     digitalWrite(VALVE_PIN_2, LOW);
-    Serial.println("Valve state: OPEN");
-  } else if (moistureValue < moistureLower) {
-    // Close the valve
+    Serial.println("Valve state: OPEN (Dry/Hot)");
+    currentTotalFlow += random(3, 11);
+  } else if (averageMoisture < moistureLower && humidity < humidityLower) {
+    // Close valve if moisture is sufficient or humidity is high
     digitalWrite(VALVE_PIN_1, LOW);
     digitalWrite(VALVE_PIN_2, LOW);
-    Serial.println("Valve state: CLOSED");
+    Serial.println("Valve state: CLOSED (Wet/High Humidity)");
+    currentTotalFlow = 0;
   } else {
-    Serial.println("Moisture value within range. No action taken.");
+    currentTotalFlow = 0;
+    digitalWrite(VALVE_PIN_1, LOW);
+    digitalWrite(VALVE_PIN_2, LOW);
+    Serial.println("Conditions within acceptable range. No action taken.");
   }
+
+  Serial.print("Current flow output (in mL): "); 
+  Serial.println(currentTotalFlow); 
 }
+
 
 class MyClientCallback : public BLEClientCallbacks {
   void onConnect(BLEClient *pclient) {}
@@ -152,6 +208,13 @@ class MyAdvertisedDeviceCallbacks : public BLEAdvertisedDeviceCallbacks {
   }  // onResult
 };  // MyAdvertisedDeviceCallbacks
 
+// volatile int pulseCount = 0;  // Variable to store pulse count
+
+// // ISR to count pulses
+// void IRAM_ATTR countPulse() {
+//   pulseCount++;
+// }
+
 void setup() {
   Serial.begin(115200);
 
@@ -173,6 +236,9 @@ void setup() {
   pBLEScan->setWindow(449);
   pBLEScan->setActiveScan(true);
   pBLEScan->start(5, false);
+
+  // pinMode(FLOW_SENSOR_PIN, INPUT_PULLUP);
+  // attachInterrupt(digitalPinToInterrupt(FLOW_SENSOR_PIN), countPulse, FALLING);
 }  // End of setup.
 
 // This is the Arduino main loop function.
@@ -188,6 +254,20 @@ void loop() {
       Serial.println("We have failed to connect to the server; there is nothing more we will do.");
     }
     doConnect = false;
+    // static unsigned long lastTime = 0;
+    // unsigned long currentTime = millis();
+    
+    // if (currentTime - lastTime >= 1000) {  // Measure every 1 second
+    //   lastTime = currentTime;
+
+    //   // Calculate flow rate (example formula, adjust as needed)
+    //   float flowRate = (pulseCount / 7.5);  // Adjust based on calibration
+    //   pulseCount = 0;  // Reset pulse count
+
+    //   Serial.print("Flow Rate: ");
+    //   Serial.print(flowRate);
+    //   Serial.println(" L/min");
+    // }
   }
 
   // If we are connected to a peer BLE Server, update the characteristic each time we are reached
